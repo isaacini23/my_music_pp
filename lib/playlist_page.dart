@@ -20,6 +20,13 @@ class _PlaylistPageState extends State<PlaylistPage> {
   void initState() {
     super.initState();
     _requestPermission();
+
+    // Listen for playback state changes
+    _audioPlayer.playerStateStream.listen((state) {
+      setState(() {
+        _isPlaying = state.playing;
+      });
+    });
   }
 
   Future<void> _requestPermission() async {
@@ -30,13 +37,17 @@ class _PlaylistPageState extends State<PlaylistPage> {
     setState(() {});
   }
 
-  void _playSong(SongModel song) {
-    _audioPlayer.setAudioSource(AudioSource.uri(Uri.parse(song.uri!)));
-    _audioPlayer.play();
-    setState(() {
-      _currentSong = song;
-      _isPlaying = true;
-    });
+  Future<void> _playSong(SongModel song) async {
+    try {
+      await _audioPlayer.setAudioSource(AudioSource.uri(Uri.parse(song.uri!)));
+      await _audioPlayer.play();
+      setState(() {
+        _currentSong = song;
+        _isPlaying = true;
+      });
+    } catch (e) {
+      print("Error playing song: $e");
+    }
   }
 
   void _pauseOrResume() {
@@ -48,6 +59,27 @@ class _PlaylistPageState extends State<PlaylistPage> {
     setState(() {
       _isPlaying = !_isPlaying;
     });
+  }
+
+  void _navigateToPlayerPage() {
+    if (_currentSong != null) {
+      Navigator.push(
+        context,
+        PageRouteBuilder(
+          transitionDuration: const Duration(milliseconds: 400),
+          pageBuilder: (_, __, ___) => PlayerPage(
+            audioPlayer: _audioPlayer, // Shared AudioPlayer instance
+            songUri: _currentSong!.uri!,
+            title: _currentSong!.title,
+            artist: _currentSong!.artist ?? "Unknown Artist",
+            songId: _currentSong!.id,
+          ),
+          transitionsBuilder: (_, animation, __, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+        ),
+      );
+    }
   }
 
   @override
@@ -106,17 +138,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
                       ),
                       onTap: () {
                         _playSong(song);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => PlayerPage(
-                              songUri: song.uri!,
-                              title: song.title,
-                              artist: song.artist ?? "Unknown Artist",
-                              songId: song.id,
-                            ),
-                          ),
-                        );
+                        _navigateToPlayerPage();
                       },
                     );
                   },
@@ -125,50 +147,54 @@ class _PlaylistPageState extends State<PlaylistPage> {
             ),
           ),
 
-          // 'Now Playing' Widget
+          // 'Now Playing' Widget - Clickable & Animates to Player Page
           if (_currentSong != null)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              color: Colors.black.withOpacity(0.9),
-              child: Row(
-                children: [
-                  QueryArtworkWidget(
-                    id: _currentSong!.id,
-                    type: ArtworkType.AUDIO,
-                    artworkBorder: BorderRadius.circular(10),
-                    artworkHeight: 50,
-                    artworkWidth: 50,
-                    nullArtworkWidget: const Icon(Icons.music_note,
-                        size: 50, color: Colors.white),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _currentSong!.title,
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 16),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        Text(
-                          _currentSong!.artist ?? "Unknown Artist",
-                          style: const TextStyle(
-                              color: Colors.white70, fontSize: 14),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
+            GestureDetector(
+              onTap: _navigateToPlayerPage,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                color: Colors.black.withOpacity(0.9),
+                child: Row(
+                  children: [
+                    QueryArtworkWidget(
+                      id: _currentSong!.id,
+                      type: ArtworkType.AUDIO,
+                      artworkBorder: BorderRadius.circular(10),
+                      artworkHeight: 50,
+                      artworkWidth: 50,
+                      nullArtworkWidget: const Icon(Icons.music_note,
+                          size: 50, color: Colors.white),
                     ),
-                  ),
-                  IconButton(
-                    icon: Icon(
-                        _isPlaying ? Icons.pause_circle : Icons.play_circle),
-                    color: Colors.white,
-                    iconSize: 40,
-                    onPressed: _pauseOrResume,
-                  ),
-                ],
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _currentSong!.title,
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 16),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            _currentSong!.artist ?? "Unknown Artist",
+                            style: const TextStyle(
+                                color: Colors.white70, fontSize: 14),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(
+                          _isPlaying ? Icons.pause_circle : Icons.play_circle),
+                      color: Colors.white,
+                      iconSize: 40,
+                      onPressed: _pauseOrResume,
+                    ),
+                  ],
+                ),
               ),
             ),
         ],

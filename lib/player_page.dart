@@ -1,10 +1,11 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:palette_generator/palette_generator.dart';
-import 'package:sleek_circular_slider/sleek_circular_slider.dart';
 
 class PlayerPage extends StatefulWidget {
+  final AudioPlayer audioPlayer;
   final String songUri;
   final String title;
   final String artist;
@@ -12,6 +13,7 @@ class PlayerPage extends StatefulWidget {
 
   const PlayerPage({
     Key? key,
+    required this.audioPlayer,
     required this.songUri,
     required this.title,
     required this.artist,
@@ -23,12 +25,12 @@ class PlayerPage extends StatefulWidget {
 }
 
 class _PlayerPageState extends State<PlayerPage> {
-  final AudioPlayer _audioPlayer = AudioPlayer();
+  final OnAudioQuery _audioQuery = OnAudioQuery();
   Duration _duration = Duration.zero;
   Duration _position = Duration.zero;
-  bool isPlaying = true;
-  Color backgroundColor = Colors.black;
-  Color secondaryColor = Colors.black;
+  bool isPlaying = false;
+  Color _dominantColor = Colors.black;
+  PaletteGenerator? _palette;
 
   @override
   void initState() {
@@ -39,66 +41,49 @@ class _PlayerPageState extends State<PlayerPage> {
 
   Future<void> _setupPlayer() async {
     try {
-      await _audioPlayer
-          .setAudioSource(AudioSource.uri(Uri.parse(widget.songUri)));
-
-      _audioPlayer.durationStream.listen((d) {
+      widget.audioPlayer.durationStream.listen((d) {
         if (d != null) {
-          setState(() {
-            _duration = d;
-          });
+          setState(() => _duration = d);
         }
       });
 
-      _audioPlayer.positionStream.listen((p) {
-        setState(() {
-          _position = p;
-        });
+      widget.audioPlayer.positionStream.listen((p) {
+        setState(() => _position = p);
       });
 
-      _audioPlayer.playerStateStream.listen((state) {
-        setState(() {
-          isPlaying = state.playing;
-        });
+      widget.audioPlayer.playerStateStream.listen((state) {
+        setState(() => isPlaying = state.playing);
       });
-
-      _audioPlayer.play();
     } catch (e) {
-      debugPrint("Error loading song: $e");
+      print("Error loading song: $e");
     }
   }
 
   Future<void> _extractAlbumArtColors() async {
     try {
-      final PaletteGenerator palette = await PaletteGenerator.fromImageProvider(
-        QueryArtworkWidget(id: widget.songId, type: ArtworkType.AUDIO)
-                .artworkImage ??
-            const AssetImage('assets/default_album.png'),
-      );
+      Uint8List? imageBytes =
+          await _audioQuery.queryArtwork(widget.songId, ArtworkType.AUDIO);
+      if (imageBytes != null) {
+        final imageProvider = MemoryImage(imageBytes);
+        _palette = await PaletteGenerator.fromImageProvider(imageProvider);
 
-      if (mounted) {
         setState(() {
-          backgroundColor = palette.dominantColor?.color ?? Colors.black;
-          secondaryColor = palette.lightVibrantColor?.color ??
-              backgroundColor.withOpacity(0.7);
+          _dominantColor = _palette?.dominantColor?.color ?? Colors.black;
         });
       }
     } catch (e) {
-      debugPrint("Error extracting colors: $e");
+      print("Error extracting album art colors: $e");
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: backgroundColor,
+      backgroundColor: _dominantColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         leading: IconButton(
-          onPressed: () {
-            _audioPlayer.stop();
-            Navigator.pop(context);
-          },
+          onPressed: () => Navigator.pop(context),
           icon: const Icon(Icons.keyboard_arrow_down,
               size: 30, color: Colors.white),
         ),
@@ -106,44 +91,6 @@ class _PlayerPageState extends State<PlayerPage> {
       body: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Circular Album Art with Progress Bar
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              SleekCircularSlider(
-                appearance: CircularSliderAppearance(
-                  customWidths:
-                      CustomSliderWidths(progressBarWidth: 8, trackWidth: 8),
-                  size: 250,
-                  startAngle: 180,
-                  angleRange: 360,
-                  customColors: CustomSliderColors(
-                    progressBarColor: Colors.white,
-                    trackColor: Colors.white.withOpacity(0.3),
-                    dotColor: Colors.transparent,
-                  ),
-                ),
-                min: 0,
-                max: _duration.inSeconds.toDouble(),
-                initialValue: _position.inSeconds.toDouble(),
-                onChange: (double value) {
-                  _audioPlayer.seek(Duration(seconds: value.toInt()));
-                },
-              ),
-              QueryArtworkWidget(
-                id: widget.songId,
-                type: ArtworkType.AUDIO,
-                artworkHeight: 200,
-                artworkWidth: 200,
-                artworkBorder: BorderRadius.circular(100),
-                nullArtworkWidget: const Icon(Icons.music_note,
-                    size: 150, color: Colors.white),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-
-          // Song title and artist
           Text(widget.title,
               style: const TextStyle(
                   fontSize: 24,
@@ -151,52 +98,98 @@ class _PlayerPageState extends State<PlayerPage> {
                   color: Colors.white)),
           const SizedBox(height: 5),
           Text(widget.artist,
-              style: const TextStyle(fontSize: 20, color: Colors.white70)),
+              style: const TextStyle(fontSize: 18, color: Colors.white70)),
           const SizedBox(height: 20),
-
-          // Time indicators
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              SizedBox(
+                height: 280,
+                width: 280,
+                child: CircularProgressIndicator(
+                  value: _position.inSeconds /
+                      (_duration.inSeconds == 0 ? 1 : _duration.inSeconds),
+                  strokeWidth: 6,
+                  valueColor:
+                      const AlwaysStoppedAnimation<Color>(Colors.orangeAccent),
+                  backgroundColor: Colors.white30,
+                ),
+              ),
+              FutureBuilder<Uint8List?>(
+                future:
+                    _audioQuery.queryArtwork(widget.songId, ArtworkType.AUDIO),
+                builder: (context, snapshot) {
+                  if (snapshot.hasData && snapshot.data != null) {
+                    return ClipRRect(
+                      borderRadius: BorderRadius.circular(140),
+                      child: Image.memory(snapshot.data!,
+                          height: 240, width: 240, fit: BoxFit.cover),
+                    );
+                  } else {
+                    return const Icon(Icons.music_note,
+                        size: 150, color: Colors.white);
+                  }
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 30),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 40),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            padding: const EdgeInsets.symmetric(horizontal: 30),
+            child: Column(
               children: [
-                Text(_formatDuration(_position),
-                    style: const TextStyle(color: Colors.white70)),
-                Text(_formatDuration(_duration - _position),
-                    style: const TextStyle(color: Colors.white70)),
+                Slider(
+                  activeColor: Colors.orangeAccent,
+                  inactiveColor: Colors.white30,
+                  min: 0,
+                  max: _duration.inSeconds.toDouble(),
+                  value: _position.inSeconds
+                      .toDouble()
+                      .clamp(0, _duration.inSeconds.toDouble()),
+                  onChanged: (value) {
+                    widget.audioPlayer.seek(Duration(seconds: value.toInt()));
+                  },
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(_formatDuration(_position),
+                          style: const TextStyle(color: Colors.white70)),
+                      Text(_formatDuration(_duration - _position),
+                          style: const TextStyle(color: Colors.white70)),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
-
-          const SizedBox(height: 20),
-
-          // Playback Controls
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               IconButton(
-                onPressed: () => _audioPlayer.seekToPrevious(),
+                onPressed: () async {
+                  await widget.audioPlayer.seekToPrevious();
+                },
                 icon: const Icon(Icons.skip_previous_rounded,
                     size: 50, color: Colors.white),
               ),
-              GestureDetector(
-                onTap: () async {
-                  isPlaying
-                      ? await _audioPlayer.pause()
-                      : await _audioPlayer.play();
+              IconButton(
+                onPressed: () async {
+                  if (isPlaying) {
+                    await widget.audioPlayer.pause();
+                  } else {
+                    await widget.audioPlayer.play();
+                  }
                 },
-                child: Container(
-                  padding: const EdgeInsets.all(15),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(isPlaying ? Icons.pause : Icons.play_arrow,
-                      size: 50, color: backgroundColor),
-                ),
+                icon: Icon(isPlaying ? Icons.pause_circle : Icons.play_circle,
+                    size: 70, color: Colors.white),
               ),
               IconButton(
-                onPressed: () => _audioPlayer.seekToNext(),
+                onPressed: () async {
+                  await widget.audioPlayer.seekToNext();
+                },
                 icon: const Icon(Icons.skip_next_rounded,
                     size: 50, color: Colors.white),
               ),
@@ -211,11 +204,5 @@ class _PlayerPageState extends State<PlayerPage> {
     String minutes = duration.inMinutes.toString().padLeft(2, '0');
     String seconds = (duration.inSeconds % 60).toString().padLeft(2, '0');
     return "$minutes:$seconds";
-  }
-
-  @override
-  void dispose() {
-    _audioPlayer.dispose();
-    super.dispose();
   }
 }
