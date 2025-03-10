@@ -6,18 +6,14 @@ import 'package:palette_generator/palette_generator.dart';
 
 class PlayerPage extends StatefulWidget {
   final AudioPlayer audioPlayer;
-  final String songUri;
-  final String title;
-  final String artist;
-  final int songId;
+  final List<SongModel> songList;
+  final int currentIndex;
 
   const PlayerPage({
     Key? key,
     required this.audioPlayer,
-    required this.songUri,
-    required this.title,
-    required this.artist,
-    required this.songId,
+    required this.songList,
+    required this.currentIndex,
   }) : super(key: key);
 
   @override
@@ -30,17 +26,23 @@ class _PlayerPageState extends State<PlayerPage> {
   Duration _position = Duration.zero;
   bool isPlaying = false;
   Color _dominantColor = Colors.black;
+  int _currentSongIndex = 0;
   PaletteGenerator? _palette;
 
   @override
   void initState() {
     super.initState();
+    _currentSongIndex = widget.currentIndex;
     _setupPlayer();
-    _extractAlbumArtColors();
   }
 
   Future<void> _setupPlayer() async {
     try {
+      await widget.audioPlayer.stop();
+      await widget.audioPlayer.setAudioSource(
+        AudioSource.uri(Uri.parse(widget.songList[_currentSongIndex].uri!)),
+      );
+
       widget.audioPlayer.durationStream.listen((d) {
         if (d != null) {
           setState(() => _duration = d);
@@ -51,9 +53,18 @@ class _PlayerPageState extends State<PlayerPage> {
         setState(() => _position = p);
       });
 
-      widget.audioPlayer.playerStateStream.listen((state) {
-        setState(() => isPlaying = state.playing);
+      widget.audioPlayer.playingStream.listen((isPlayingState) {
+        setState(() => isPlaying = isPlayingState);
       });
+
+      widget.audioPlayer.playerStateStream.listen((state) {
+        if (state.processingState == ProcessingState.completed) {
+          _playNextSong();
+        }
+      });
+
+      await _extractAlbumArtColors();
+      await widget.audioPlayer.play();
     } catch (e) {
       print("Error loading song: $e");
     }
@@ -61,9 +72,12 @@ class _PlayerPageState extends State<PlayerPage> {
 
   Future<void> _extractAlbumArtColors() async {
     try {
-      Uint8List? imageBytes =
-          await _audioQuery.queryArtwork(widget.songId, ArtworkType.AUDIO);
-      if (imageBytes != null) {
+      Uint8List? imageBytes = await _audioQuery.queryArtwork(
+        widget.songList[_currentSongIndex].id,
+        ArtworkType.AUDIO,
+      );
+
+      if (imageBytes != null && imageBytes.isNotEmpty) {
         final imageProvider = MemoryImage(imageBytes);
         _palette = await PaletteGenerator.fromImageProvider(imageProvider);
 
@@ -73,6 +87,24 @@ class _PlayerPageState extends State<PlayerPage> {
       }
     } catch (e) {
       print("Error extracting album art colors: $e");
+    }
+  }
+
+  void _playNextSong() {
+    if (_currentSongIndex < widget.songList.length - 1) {
+      setState(() {
+        _currentSongIndex++;
+      });
+      _setupPlayer();
+    }
+  }
+
+  void _playPreviousSong() {
+    if (_currentSongIndex > 0) {
+      setState(() {
+        _currentSongIndex--;
+      });
+      _setupPlayer();
     }
   }
 
@@ -91,13 +123,13 @@ class _PlayerPageState extends State<PlayerPage> {
       body: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(widget.title,
+          Text(widget.songList[_currentSongIndex].title,
               style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
                   color: Colors.white)),
           const SizedBox(height: 5),
-          Text(widget.artist,
+          Text(widget.songList[_currentSongIndex].artist ?? "Unknown Artist",
               style: const TextStyle(fontSize: 18, color: Colors.white70)),
           const SizedBox(height: 20),
           Stack(
@@ -107,8 +139,10 @@ class _PlayerPageState extends State<PlayerPage> {
                 height: 280,
                 width: 280,
                 child: CircularProgressIndicator(
-                  value: _position.inSeconds /
-                      (_duration.inSeconds == 0 ? 1 : _duration.inSeconds),
+                  value: _duration.inSeconds == 0
+                      ? 0
+                      : (_position.inSeconds / _duration.inSeconds)
+                          .clamp(0.0, 1.0),
                   strokeWidth: 6,
                   valueColor:
                       const AlwaysStoppedAnimation<Color>(Colors.orangeAccent),
@@ -116,8 +150,8 @@ class _PlayerPageState extends State<PlayerPage> {
                 ),
               ),
               FutureBuilder<Uint8List?>(
-                future:
-                    _audioQuery.queryArtwork(widget.songId, ArtworkType.AUDIO),
+                future: _audioQuery.queryArtwork(
+                    widget.songList[_currentSongIndex].id, ArtworkType.AUDIO),
                 builder: (context, snapshot) {
                   if (snapshot.hasData && snapshot.data != null) {
                     return ClipRRect(
@@ -169,9 +203,7 @@ class _PlayerPageState extends State<PlayerPage> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               IconButton(
-                onPressed: () async {
-                  await widget.audioPlayer.seekToPrevious();
-                },
+                onPressed: _playPreviousSong,
                 icon: const Icon(Icons.skip_previous_rounded,
                     size: 50, color: Colors.white),
               ),
@@ -182,14 +214,15 @@ class _PlayerPageState extends State<PlayerPage> {
                   } else {
                     await widget.audioPlayer.play();
                   }
+                  setState(() {
+                    isPlaying = !isPlaying;
+                  });
                 },
                 icon: Icon(isPlaying ? Icons.pause_circle : Icons.play_circle,
                     size: 70, color: Colors.white),
               ),
               IconButton(
-                onPressed: () async {
-                  await widget.audioPlayer.seekToNext();
-                },
+                onPressed: _playNextSong,
                 icon: const Icon(Icons.skip_next_rounded,
                     size: 50, color: Colors.white),
               ),

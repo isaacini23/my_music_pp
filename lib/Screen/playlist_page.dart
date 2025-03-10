@@ -61,18 +61,18 @@ class _PlaylistPageState extends State<PlaylistPage> {
     });
   }
 
-  void _navigateToPlayerPage() {
-    if (_currentSong != null) {
+  void _navigateToPlayerPage(SongModel selectedSong, List<SongModel> songs) {
+    int currentIndex = songs.indexWhere((song) => song.id == selectedSong.id);
+
+    if (currentIndex != -1) {
       Navigator.push(
         context,
         PageRouteBuilder(
           transitionDuration: const Duration(milliseconds: 400),
           pageBuilder: (_, __, ___) => PlayerPage(
-            audioPlayer: _audioPlayer, // Shared AudioPlayer instance
-            songUri: _currentSong!.uri!,
-            title: _currentSong!.title,
-            artist: _currentSong!.artist ?? "Unknown Artist",
-            songId: _currentSong!.id,
+            audioPlayer: _audioPlayer,
+            songList: songs, // ✅ Pass the full song list
+            currentIndex: currentIndex, // ✅ Pass the selected song index
           ),
           transitionsBuilder: (_, animation, __, child) {
             return FadeTransition(opacity: animation, child: child);
@@ -138,7 +138,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
                       ),
                       onTap: () {
                         _playSong(song);
-                        _navigateToPlayerPage();
+                        _navigateToPlayerPage(song, songs);
                       },
                     );
                   },
@@ -150,7 +150,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
           // 'Now Playing' Widget - Clickable & Animates to Player Page
           if (_currentSong != null)
             GestureDetector(
-              onTap: _navigateToPlayerPage,
+              onTap: () => _navigateToPlayerPage(_currentSong!, []),
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 20, vertical: 10),

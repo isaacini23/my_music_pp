@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:music_player/playlist_page.dart';
+import 'package:music_player/Screen/splash.dart';
 
 void main() {
   runApp(const MyApp());
@@ -16,7 +16,7 @@ class MyApp extends StatelessWidget {
         textTheme: const TextTheme(bodyMedium: TextStyle(color: Colors.white)),
       ),
       debugShowCheckedModeBanner: false,
-      home: const PlaylistPage(),
+      home: const SplashScreen(),
     );
   }
 }
