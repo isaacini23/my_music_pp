@@ -1,23 +1,57 @@
 # Flutter Music Player
-## Screenshots
-<p>
-  <img src="https://user-images.githubusercontent.com/96375955/188636956-4731f5f6-c054-477b-b4b5-dc36405e04b5.png" width="300">
-  <img src="https://user-images.githubusercontent.com/96375955/188636970-e66deeb6-7f9f-4428-bfd1-8e35c8180dcf.png" width="300">
-  <img src="https://user-images.githubusercontent.com/96375955/188637221-2c8b241a-cc0f-473e-b912-346eb00f2138.png" width="300">
-  </p>
- 
 
+A Flutter music-player application project exploring local audio playback, media-library access and a custom listening interface.
 
-[Instagram](https://instagram.com/niima.dev)
+## Overview
+
+The app is built with Flutter and Dart. The repository includes audio and device-media packages such as `just_audio`, `on_audio_query`, `permission_handler` and `palette_generator`.
+
+## Technology Stack
+
+- Flutter and Dart
+- just_audio
+- on_audio_query
+- permission_handler
+- palette_generator
+- sleek_circular_slider
+
+## Project Status
+
+This is a partially completed project. The repository contains the application entry point, splash screen and music-player implementation work. Local-device media integration and interface refinement are still part of the development roadmap. Please treat the project as a work in progress rather than a finished production music player.
+
 ## Getting Started
 
-This project is a starting point for a Flutter application.
+1. Install Flutter and configure an Android or iOS development environment.
+2. Clone the repository:
 
-A few resources to get you started if this is your first Flutter project:
+   ```bash
+   git clone https://github.com/isaacini23/my_music_pp.git
+   cd my_music_pp
+   ```
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+3. Install dependencies:
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+   ```bash
+   flutter pub get
+   ```
+
+4. Run the application:
+
+   ```bash
+   flutter run
+   ```
+
+## Development Checks
+
+```bash
+flutter analyze
+flutter test
+```
+
+## Platform Notes
+
+Local audio access requires the appropriate platform permissions and configuration. Test media-library behaviour on a physical device as well as an emulator.
+
+## Author
+
+**Ini Isaac** — [GitHub](https://github.com/isaacini23)
